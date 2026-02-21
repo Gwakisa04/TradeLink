@@ -66,7 +66,7 @@ export default function Dashboard({ currentAccount = {}, onNavigate }) {
 
       {isCurrentAccount ? (
         <div className="dashboard-current-account">
-          <h3 className="dashboard-card-title">Current account (held for this session)</h3>
+          <h3 className="dashboard-card-title">Your account</h3>
           <div className="dashboard-keys">
             <div className="dashboard-key-row">
               <label>Account ID <span className="label-hint">(Stellar account address)</span></label>
@@ -79,24 +79,39 @@ export default function Dashboard({ currentAccount = {}, onNavigate }) {
               </div>
             )}
           </div>
+          <details className="dashboard-view-other" style={{ marginTop: '0.75rem' }}>
+            <summary className="panel-hint" style={{ cursor: 'pointer' }}>View a different account</summary>
+            <div className="dashboard-load-row" style={{ marginTop: '0.5rem' }}>
+              <KeyField
+                label="Account ID"
+                value={publicKey}
+                onChange={(e) => setPublicKey(e.target.value)}
+                placeholder="G..."
+              />
+              <button type="button" className="btn-secondary" onClick={handleLoad} disabled={loading}>
+                Load
+              </button>
+            </div>
+          </details>
         </div>
       ) : (
-        <p className="dashboard-no-account">
-          Create an account or log in to see your keys, balances, and history here.
-        </p>
+        <>
+          <p className="dashboard-no-account">
+            Create an account or log in to see your keys, balances, and history here.
+          </p>
+          <div className="dashboard-load-row">
+            <KeyField
+              label="Account ID"
+              value={publicKey}
+              onChange={(e) => setPublicKey(e.target.value)}
+              placeholder="G..."
+            />
+            <button type="button" className="btn-primary" onClick={handleLoad} disabled={loading}>
+              Load balances & history
+            </button>
+          </div>
+        </>
       )}
-
-      <div className="dashboard-load-row">
-        <KeyField
-          label={isCurrentAccount ? "Account ID to view (or change to view another)" : "Account ID"}
-          value={publicKey}
-          onChange={(e) => setPublicKey(e.target.value)}
-          placeholder="G..."
-        />
-        <button type="button" className="btn-primary" onClick={handleLoad} disabled={loading}>
-          {loading ? 'Loading…' : 'Load balances & history'}
-        </button>
-      </div>
 
       {error && (
         <div className="result-box error" style={{ marginTop: '1rem' }}>
@@ -169,7 +184,7 @@ export default function Dashboard({ currentAccount = {}, onNavigate }) {
                 </thead>
                 <tbody>
                   {paymentHistory.map((tx) => {
-                    const isOut = tx.from === publicKey.trim();
+                    const isOut = tx.isIncoming === false || (tx.isIncoming == null && tx.from === publicKey.trim());
                     return (
                       <tr key={tx.id}>
                         <td className="payment-date">{formatDate(tx.createdAt)}</td>

@@ -47,6 +47,16 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
     setResult(null);
     const destAsset = opts.sameAsset ? sendAsset : destinationAsset;
     const receiver = opts.useSenderAsReceiver ? senderPublicKey.trim() : receiverPublicKey.trim();
+    // For exchange (path payment): backend expects destAmount (amount of destination asset to receive).
+    const isExchange = opts.useSenderAsReceiver && sendAsset !== destinationAsset;
+    if (isExchange && !estimated) {
+      setLoading(false);
+      setError(`No rate for ${sendAsset}→${destinationAsset}. Add trustlines and ensure liquidity exists.`);
+      return;
+    }
+    const amountToSend = isExchange && estimated
+      ? String(estimated.amount)
+      : amount.trim();
     try {
       const data = await sendPayment({
         senderPublicKey: senderPublicKey.trim(),
@@ -54,7 +64,7 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
         receiverPublicKey: receiver,
         sendAsset,
         destinationAsset: destAsset,
-        amount: amount.trim(),
+        amount: amountToSend,
       });
       setResult(data);
     } catch (err) {

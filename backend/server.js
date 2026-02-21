@@ -18,6 +18,8 @@ const TZS_ISSUER_PUBLIC = TZS_ISSUER_KEYPAIR.publicKey();
 // Known testnet assets
 const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 const FRIENDBOT_URL = 'https://friendbot.stellar.org';
+// Demo rate when orderbook has no liquidity: 1 XLM = TZS_PER_XLM TZS
+const TZS_PER_XLM = 1000;
 
 // --- Helpers ---
 function assetFromCode(code) {
@@ -117,17 +119,22 @@ app.get('/account/:publicKey', async (req, res) => {
     });
 
     const payments = await server.payments().forAccount(publicKey).limit(10).order('desc').call();
-    const paymentHistory = payments.records.map((r) => ({
-      id: r.id,
-      type: r.type,
-      from: r.from,
-      to: r.to,
-      amount: r.amount,
-      assetCode: r.asset_type === 'native' ? 'XLM' : r.asset_code,
-      assetIssuer: r.asset_issuer,
-      transactionHash: r.transaction_hash,
-      createdAt: r.created_at,
-    }));
+    const paymentHistory = payments.records.map((r) => {
+      const from = r.from ?? '';
+      const to = r.to ?? '';
+      return {
+        id: r.id,
+        type: r.type,
+        from,
+        to,
+        isIncoming: to === publicKey,
+        amount: r.amount ?? '0',
+        assetCode: r.asset_type === 'native' ? 'XLM' : (r.asset_code || ''),
+        assetIssuer: r.asset_issuer,
+        transactionHash: r.transaction_hash,
+        createdAt: r.created_at,
+      };
+    });
 
     res.json({ balances, paymentHistory });
   } catch (err) {
@@ -334,6 +341,16 @@ app.get('/market-rates', async (req, res) => {
     const results = await Promise.all(pairs.map(([base, counter]) => fetchOrderbookRates(base, counter)));
     const withInverse = [];
     results.forEach((r) => {
+      // If XLM/TZS or TZS/XLM has no orderbook, use fallback demo rate (1 XLM = TZS_PER_XLM TZS)
+      if ((r.base === 'XLM' && r.counter === 'TZS') || (r.base === 'TZS' && r.counter === 'XLM')) {
+        if (!r.mid && r.base === 'XLM' && r.counter === 'TZS') {
+          r.mid = String(TZS_PER_XLM);
+          r.exchangeRate = `1 XLM = ${TZS_PER_XLM} TZS`;
+        } else if (!r.mid && r.base === 'TZS' && r.counter === 'XLM') {
+          r.mid = (1 / TZS_PER_XLM).toFixed(6);
+          r.exchangeRate = `1 TZS = ${(1 / TZS_PER_XLM).toFixed(6)} XLM`;
+        }
+      }
       withInverse.push(r);
       if (r.mid && parseFloat(r.mid) > 0) {
         const inv = 1 / parseFloat(r.mid);
@@ -419,51 +436,89 @@ async function ensureTzsIssuerFunded() {
   }
 }
 
-/** Create orderbook offers so path TZS ↔ XLM exists (pathPaymentStrictReceive can find a path) */
+/** Step 1: Issuer adds trustline for TZS, then issues TZS to self (no allowTrust for self). */
+async function issueTzsToIssuer() {
+  const account = await server.loadAccount(TZS_ISSUER_PUBLIC);
+  const fee = await getBaseFeeStroops();
+  const hasTzsTrust = account.balances.some(
+    (b) => b.asset_type !== 'native' && b.asset_code === 'TZS' && b.asset_issuer === TZS_ISSUER_PUBLIC
+  );
+  const tzsBalance = account.balances.find(
+    (b) => b.asset_type !== 'native' && b.asset_code === 'TZS' && b.asset_issuer === TZS_ISSUER_PUBLIC
+  );
+  if (tzsBalance && parseFloat(tzsBalance.balance) >= 500000) return true;
+
+  const ops = [];
+  if (!hasTzsTrust) {
+    ops.push(StellarSdk.Operation.changeTrust({ asset: TZS_ASSET, limit: '1000000000' }));
+  }
+  ops.push(
+    StellarSdk.Operation.payment({
+      destination: TZS_ISSUER_PUBLIC,
+      asset: TZS_ASSET,
+      amount: '1000000',
+    })
+  );
+
+  let tx = new StellarSdk.TransactionBuilder(account, { fee, networkPassphrase });
+  ops.forEach((op) => { tx = tx.addOperation(op); });
+  tx = tx.setTimeout(30).build();
+  tx.sign(TZS_ISSUER_KEYPAIR);
+  await server.submitTransaction(tx);
+  return true;
+}
+
+/** Step 2: Create orderbook offers so path TZS ↔ XLM exists. Two separate txs for clearer errors. */
 async function createTzsXlmLiquidity() {
   try {
+    await issueTzsToIssuer();
+    await new Promise((r) => setTimeout(r, 2000));
     const account = await server.loadAccount(TZS_ISSUER_PUBLIC);
     const fee = await getBaseFeeStroops();
-    const hasTzsTrust = account.balances.some(
-      (b) => b.asset_type !== 'native' && b.asset_code === 'TZS' && b.asset_issuer === TZS_ISSUER_PUBLIC
-    );
 
-    const ops = [];
-    if (!hasTzsTrust) {
-      ops.push(StellarSdk.Operation.changeTrust({ asset: TZS_ASSET, limit: '1000000000' }));
+    // Tx 1: Sell TZS for XLM (1 TZS = 1/1000 XLM)
+    try {
+      const tx1 = new StellarSdk.TransactionBuilder(account, { fee, networkPassphrase })
+        .addOperation(StellarSdk.Operation.manageSellOffer({
+          selling: TZS_ASSET,
+          buying: XLM_NATIVE,
+          amount: '500000',
+          price: { n: 1, d: TZS_PER_XLM },
+        }))
+        .setTimeout(30)
+        .build();
+      tx1.sign(TZS_ISSUER_KEYPAIR);
+      await server.submitTransaction(tx1);
+      console.log('TZS/XLM liquidity: sell TZS for XLM offer created');
+    } catch (e1) {
+      const data = e1.response?.data;
+      console.warn('TZS/XLM offer (sell TZS):', data?.extras?.result_codes || e1.message);
     }
-    ops.push(
-      StellarSdk.Operation.payment({
-        destination: TZS_ISSUER_PUBLIC,
-        asset: TZS_ASSET,
-        amount: '1000000',
-      })
-    );
-    ops.push(
-      StellarSdk.Operation.manageSellOffer({
-        selling: TZS_ASSET,
-        buying: XLM_NATIVE,
-        amount: '500000',
-        price: '0.00002',
-      })
-    );
-    ops.push(
-      StellarSdk.Operation.manageSellOffer({
-        selling: XLM_NATIVE,
-        buying: TZS_ASSET,
-        amount: '5000',
-        price: '200',
-      })
-    );
 
-    let tx = new StellarSdk.TransactionBuilder(account, { fee, networkPassphrase });
-    ops.forEach((op) => { tx = tx.addOperation(op); });
-    tx = tx.setTimeout(30).build();
-    tx.sign(TZS_ISSUER_KEYPAIR);
-    await server.submitTransaction(tx);
-    console.log('TZS/XLM liquidity offers created');
+    await new Promise((r) => setTimeout(r, 1500));
+    const account2 = await server.loadAccount(TZS_ISSUER_PUBLIC);
+
+    // Tx 2: Sell XLM for TZS (1 XLM = 1000 TZS). Use 1000 XLM max so we only need 1M TZS to fill.
+    try {
+      const tx2 = new StellarSdk.TransactionBuilder(account2, { fee, networkPassphrase })
+        .addOperation(StellarSdk.Operation.manageSellOffer({
+          selling: XLM_NATIVE,
+          buying: TZS_ASSET,
+          amount: '1000',
+          price: { n: TZS_PER_XLM, d: 1 },
+        }))
+        .setTimeout(30)
+        .build();
+      tx2.sign(TZS_ISSUER_KEYPAIR);
+      await server.submitTransaction(tx2);
+      console.log('TZS/XLM liquidity: sell XLM for TZS offer created');
+    } catch (e2) {
+      const data = e2.response?.data;
+      console.warn('TZS/XLM offer (sell XLM):', data?.extras?.result_codes || e2.message);
+    }
   } catch (err) {
-    console.warn('TZS/XLM liquidity setup failed (path TZS↔XLM may not work):', err.message);
+    const data = err.response?.data;
+    console.warn('TZS/XLM liquidity setup:', data?.extras?.result_codes || err.message);
   }
 }
 
@@ -471,5 +526,5 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on http://0.0.0.0:${PORT} (reachable from network)`);
   console.log('TZS issuer (testnet):', TZS_ISSUER_PUBLIC);
   await ensureTzsIssuerFunded();
-  await createTzsXlmLiquidity();
+  createTzsXlmLiquidity().catch(() => {});
 });
