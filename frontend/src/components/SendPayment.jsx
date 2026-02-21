@@ -17,6 +17,7 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [successDetails, setSuccessDetails] = useState(null);
 
   const [marketRates, setMarketRates] = useState([]);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -45,6 +46,7 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
     setLoading(true);
     setError('');
     setResult(null);
+    setSuccessDetails(null);
     const destAsset = opts.sameAsset ? sendAsset : destinationAsset;
     const receiver = opts.useSenderAsReceiver ? senderPublicKey.trim() : receiverPublicKey.trim();
     // For exchange (path payment): backend expects destAmount (amount of destination asset to receive).
@@ -67,6 +69,13 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
         amount: amountToSend,
       });
       setResult(data);
+      setSuccessDetails({
+        amountSent: amountToSend,
+        sendAsset,
+        destinationAsset: destAsset,
+        receiverPublicKey: receiver,
+        isExchange: !!opts.useSenderAsReceiver && sendAsset !== destAsset,
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -91,11 +100,13 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
 
   const handleQRScan = useCallback((decodedText) => {
     const data = decodeRequestPayload(decodedText);
-    if (data) {
+    if (data?.publicKey) {
       setReceiverPublicKey(data.publicKey);
-      setDestinationAsset(data.asset);
-      setAmount(data.amount);
-      setSendAsset(data.asset);
+      if (data.asset) {
+        setDestinationAsset(data.asset);
+        setSendAsset(data.asset);
+      }
+      if (data.amount !== undefined && data.amount !== '') setAmount(data.amount);
       setPage('send');
     }
   }, []);
@@ -286,12 +297,47 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
           {error}
         </div>
       )}
-      {result && (
-        <div className="result-box success result-with-explorer" style={{ marginTop: '1rem' }}>
-          <div><strong>Transaction hash</strong></div>
-          <div className="key-display">{result.transactionHash}</div>
-          <div style={{ marginTop: '0.5rem' }}>Status: {result.result}</div>
-          <TxExplorerLink hash={result.transactionHash} />
+      {result && result.result === 'success' && successDetails && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="success-modal-title">
+          <div className="modal-content success-modal">
+            <div className="success-modal-icon">✓</div>
+            <h3 id="success-modal-title" className="success-modal-title">Payment sent</h3>
+            <p className="success-modal-subtitle">Your transaction was successful</p>
+            <div className="success-modal-details">
+              <div className="success-modal-row">
+                <span className="success-modal-label">Amount sent</span>
+                <span className="success-modal-value">
+                  {successDetails.isExchange
+                    ? `${successDetails.amountSent} ${successDetails.sendAsset} → ${successDetails.destinationAsset}`
+                    : `${successDetails.amountSent} ${successDetails.sendAsset}`}
+                </span>
+              </div>
+              <div className="success-modal-row">
+                <span className="success-modal-label">To wallet</span>
+                <span className="success-modal-value success-modal-wallet" title={successDetails.receiverPublicKey}>
+                  {successDetails.receiverPublicKey.slice(0, 8)}…{successDetails.receiverPublicKey.slice(-8)}
+                </span>
+              </div>
+              <div className="success-modal-row">
+                <span className="success-modal-label">Transaction</span>
+                <span className="success-modal-value success-modal-tx">
+                  {result.transactionHash.slice(0, 10)}…{result.transactionHash.slice(-8)}
+                </span>
+              </div>
+            </div>
+            <div className="success-modal-actions">
+              <span className="success-modal-explorer-wrap">
+                <TxExplorerLink hash={result.transactionHash} label="View on Explorer" />
+              </span>
+              <button
+                type="button"
+                className="btn-primary success-modal-close"
+                onClick={() => { setResult(null); setSuccessDetails(null); }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {onNavigate && (

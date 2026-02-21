@@ -13,12 +13,26 @@ export function encodeRequestPayload({ publicKey, asset, amount }) {
   return JSON.stringify({ publicKey: publicKey.trim(), asset, amount: String(amount).trim() });
 }
 
+/** Normalize so we always have publicKey; asset and amount optional */
+function normalizePayload(data) {
+  const pk = data?.publicKey ?? data?.accountId ?? data?.account;
+  const publicKey = typeof pk === 'string' ? pk.trim() : '';
+  if (!publicKey || publicKey.length < 10) return null;
+  const asset = data?.asset != null ? String(data.asset).trim() : '';
+  const amount = data?.amount != null ? String(data.amount).trim() : '';
+  return { publicKey, asset: asset || 'XLM', amount };
+}
+
 export function decodeRequestPayload(text) {
+  if (!text || typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  // Bare Stellar public key (G...)
+  if (trimmed.startsWith('G') && trimmed.length >= 56 && /^G[A-Z2-7]+$/.test(trimmed)) {
+    return { publicKey: trimmed, asset: 'XLM', amount: '' };
+  }
   try {
-    const data = JSON.parse(text);
-    if (data && typeof data.publicKey === 'string' && typeof data.asset === 'string' && typeof data.amount === 'string') {
-      return { publicKey: data.publicKey.trim(), asset: data.asset.trim(), amount: data.amount.trim() };
-    }
+    const data = JSON.parse(trimmed);
+    return normalizePayload(data);
   } catch (_) {}
   return null;
 }
