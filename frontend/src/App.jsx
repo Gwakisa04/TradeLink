@@ -28,6 +28,7 @@ function shortenKey(key) {
 export default function App() {
   const [page, setPage] = useState('home');
   const [currentAccount, setCurrentAccount] = useState({ publicKey: '', secretKey: '' });
+  const [menuOpen, setMenuOpen] = useState(false);
 
   function handleAccountCreated(account) {
     setCurrentAccount(account);
@@ -46,6 +47,7 @@ export default function App() {
 
   function handleNavigate(id) {
     setPage(id);
+    setMenuOpen(false);
   }
 
   const isLoggedIn = Boolean(currentAccount.publicKey && currentAccount.secretKey);
@@ -53,18 +55,39 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
+        {menuOpen && (
+          <div
+            className="nav-backdrop"
+            onClick={() => setMenuOpen(false)}
+            onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close menu"
+          />
+        )}
         <div className="header-inner">
-          <button type="button" className="logo-wrap" onClick={() => setPage('home')} aria-label="Home">
+          <button type="button" className="logo-wrap" onClick={() => { setPage('home'); setMenuOpen(false); }} aria-label="Home">
             <TradeLinkLogo className="logo-svg" size={36} />
             <span className="brand">TradeLink</span>
           </button>
-          <nav className="nav">
+          <button
+            type="button"
+            className="nav-menu-btn"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+          >
+            <span className="nav-menu-icon" />
+            <span className="nav-menu-icon" />
+            <span className="nav-menu-icon" />
+          </button>
+          <nav className={`nav ${menuOpen ? 'nav-open' : ''}`}>
             {PAGES.map((p) => (
               <button
                 key={p.id}
                 type="button"
                 className={`nav-link ${page === p.id ? 'active' : ''}`}
-                onClick={() => setPage(p.id)}
+                onClick={() => handleNavigate(p.id)}
               >
                 {p.label}
               </button>
