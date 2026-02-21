@@ -1017,3 +1017,139 @@ button:disabled {
   font-size: 0.9rem;
   margin: 0.5rem 0 0;
 }
+
+/* Request payment page */
+.request-payment-page .card-panel {
+  max-width: 420px;
+}
+
+.request-payment-form .form-row {
+  margin-bottom: 0.75rem;
+}
+
+.qr-result {
+  margin-top: 1.5rem;
+  text-align: center;
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.qr-result h3 {
+  font-size: 1rem;
+  margin: 0 0 0.35rem;
+  color: #e2e8f0;
+}
+
+.qr-code-wrap {
+  padding: 1rem;
+  background: #fff;
+  border-radius: 12px;
+  display: inline-block;
+  margin: 0.75rem 0;
+}
+
+.qr-code-img {
+  display: block;
+  width: 280px;
+  height: 280px;
+}
+
+.qr-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.qr-summary strong {
+  color: #e2e8f0;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background: #1e293b;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 12px;
+  padding: 1.25rem;
+  max-width: 400px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: #f1f5f9;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.modal-close:hover {
+  color: #e2e8f0;
+}
+
+.scan-qr-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.scan-qr-tabs button {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  background: rgba(51, 65, 85, 0.6);
+  color: #94a3b8;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.scan-qr-tabs button.active {
+  background: linear-gradient(90deg, #0ea5e9, #6366f1);
+  color: white;
+  border-color: transparent;
+}
+
+.scan-qr-file {
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px dashed rgba(71, 85, 105, 0.6);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.qr-reader video {
+  max-width: 100%;
+  border-radius: 8px;
+}

@@ -6,6 +6,7 @@ import Trustline from './components/Trustline';
 import Home from './components/Home';
 import Login from './components/Login';
 import AnchorInfo from './components/AnchorInfo';
+import RequestPayment from './components/RequestPayment';
 import TradeLinkLogo from './components/TradeLinkLogo';
 
 const PAGES = [
@@ -14,6 +15,7 @@ const PAGES = [
   { id: 'create-account', label: 'Create Account' },
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'trustline', label: 'Add Trustline' },
+  { id: 'request', label: 'Request payment' },
   { id: 'send', label: 'Send / Exchange' },
   { id: 'anchor', label: 'Anchor Info' },
 ];
@@ -87,6 +89,12 @@ export default function App() {
           />
         )}
         {page === 'trustline' && <Trustline onNavigate={handleNavigate} />}
+        {page === 'request' && (
+          <RequestPayment
+            currentAccountPublicKey={currentAccount.publicKey}
+            onNavigate={handleNavigate}
+          />
+        )}
         {page === 'send' && (
           <SendPayment
             senderKey={currentAccount.publicKey}

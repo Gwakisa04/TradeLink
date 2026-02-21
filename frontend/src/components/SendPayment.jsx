@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { sendPayment, getMarketRates } from '../api';
 import TxExplorerLink from './TxExplorerLink';
 import KeyField from './KeyField';
+import ScanQRModal from './ScanQRModal';
+import { decodeRequestPayload } from './RequestPayment';
 
 const ASSET_OPTIONS = ['XLM', 'USDC', 'TZS'];
 
@@ -20,6 +22,7 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
   const [ratesLoading, setRatesLoading] = useState(true);
   const [ratesError, setRatesError] = useState('');
   const [page, setPage] = useState('send');
+  const [showScanModal, setShowScanModal] = useState(false);
 
   useEffect(() => {
     if (senderKey) setSenderPublicKey(senderKey);
@@ -76,6 +79,17 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
   }
   const estimated = page === 'exchange' ? getEstimatedReceive(sendAsset, destinationAsset, amount) : null;
 
+  const handleQRScan = useCallback((decodedText) => {
+    const data = decodeRequestPayload(decodedText);
+    if (data) {
+      setReceiverPublicKey(data.publicKey);
+      setDestinationAsset(data.asset);
+      setAmount(data.amount);
+      setSendAsset(data.asset);
+      setPage('send');
+    }
+  }, []);
+
   return (
     <section className="section send-exchange-page">
       <div className="send-exchange-header">
@@ -105,7 +119,12 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
       {page === 'send' && (
         <div className="send-exchange-view send-view">
           <h3>Send token</h3>
-          <p className="panel-hint">Send the same asset to a receiver.</p>
+          <p className="panel-hint">Send the same asset to a receiver. Or scan a payment request QR to autofill.</p>
+          <div className="form-actions" style={{ marginBottom: '1rem' }}>
+            <button type="button" className="btn-secondary" onClick={() => setShowScanModal(true)}>
+              📷 Scan QR to fill
+            </button>
+          </div>
           <form onSubmit={(e) => handleSendSubmit(e, { sameAsset: true })}>
             <KeyField
               label="Sender Account ID (public key)"
@@ -271,6 +290,13 @@ export default function SendPayment({ senderKey, senderSecret, onNavigate }) {
             Dashboard →
           </button>
         </div>
+      )}
+
+      {showScanModal && (
+        <ScanQRModal
+          onScan={handleQRScan}
+          onClose={() => setShowScanModal(false)}
+        />
       )}
     </section>
   );
